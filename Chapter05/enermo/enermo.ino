@@ -15,9 +15,8 @@ String sensorLocation = "{ENTER_YOUR_SENSOR_ADDRESS_LOCATION_HERE}";
 
 String voltageString, currentString, powerString, energyString, frequencyString, pfString;
 unsigned long currentTime,thisTime;
-const uint32_t SERIAL_SPEED{115200};  ///< Set the baud rate for Serial I/O
+const uint32_t SERIAL_SPEED{115200};
 
-////// PZEM-004T 
 #include <PZEM004Tv30.h>
 PZEM004Tv30 pzem(Serial2, 16, 17);
 float voltage, current, power, energy, frequency, pf, total_voltage, total_current, total_power, total_frequency, total_pf, prev_energy, temp_energy;
@@ -48,14 +47,11 @@ String dataHandler(const String& var){
 #define LED_BUILTIN       2
 #define LED_ON            HIGH
 #define LED_OFF           LOW
-
-// You only need to format the filesystem once
-//#define FORMAT_FILESYSTEM true
 #define FORMAT_FILESYSTEM false
 #define USE_LITTLEFS    true
 #define USE_SPIFFS      false
 #include "FS.h"
-#include <LittleFS.h>       // https://github.com/espressif/arduino-esp32/tree/master/libraries/LittleFS
+#include <LittleFS.h>
 FS* filesystem =      &LittleFS;
 #define FileFS        LittleFS
 #define FS_Name       "LittleFS"
@@ -394,28 +390,28 @@ bool initialConfig = false;
 
 #if ( USE_DHCP_IP )
   // Use DHCP
-  
+
   #if (_ESPASYNC_WIFIMGR_LOGLEVEL_ > 3)
     #warning Using DHCP IP
   #endif
-  
+
   IPAddress stationIP   = IPAddress(0, 0, 0, 0);
   IPAddress gatewayIP   = IPAddress(192, 168, 2, 1);
   IPAddress netMask     = IPAddress(255, 255, 255, 0);
-  
+
 #else
   // Use static IP
-  
+
   #if (_ESPASYNC_WIFIMGR_LOGLEVEL_ > 3)
     #warning Using static IP
   #endif
-  
+
   #ifdef ESP32
     IPAddress stationIP   = IPAddress(192, 168, 2, 232);
   #else
     IPAddress stationIP   = IPAddress(192, 168, 2, 186);
   #endif
-  
+
   IPAddress gatewayIP   = IPAddress(192, 168, 2, 1);
   IPAddress netMask     = IPAddress(255, 255, 255, 0);
 #endif
@@ -537,7 +533,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 <script>
 if (!!window.EventSource) {
  var source = new EventSource('/events');
- 
+
  source.addEventListener('open', function(e) {
   console.log("Events Connected");
  }, false);
@@ -546,26 +542,26 @@ if (!!window.EventSource) {
     console.log("Events Disconnected");
   }
  }, false);
- 
+
  source.addEventListener('message', function(e) {
   console.log("message", e.data);
  }, false);
- 
+
  source.addEventListener('voltage', function(e) {
   console.log("voltage", e.data);
   document.getElementById("temp").innerHTML = e.data;
  }, false);
- 
+
  source.addEventListener('current', function(e) {
   console.log("current", e.data);
   document.getElementById("hum").innerHTML = e.data;
  }, false);
- 
+
  source.addEventListener('power', function(e) {
   console.log("power", e.data);
   document.getElementById("pres").innerHTML = e.data;
  }, false);
- 
+
  source.addEventListener('energy', function(e) {
   console.log("energy", e.data);
   document.getElementById("energy").innerHTML = e.data;
@@ -590,7 +586,7 @@ void setup()
   total_voltage = total_current = total_power = total_frequency = total_pf = prev_energy = 0;
   //set led pin as output
   pinMode(LED_BUILTIN, OUTPUT);
-  
+
   Serial.begin(115200);
   while (!Serial);
 
@@ -611,19 +607,19 @@ void setup()
 
   Serial.setDebugOutput(false);
 
-  if (FORMAT_FILESYSTEM) 
+  if (FORMAT_FILESYSTEM)
     FileFS.format();
 
   // Format FileFS if not yet
   if (!FileFS.begin(true))
   {
     Serial.println(F("SPIFFS/LittleFS failed! Already tried formatting."));
-  
+
     if (!FileFS.begin())
-    {     
+    {
       // prevents debug info from the library to hide err message.
       delay(100);
-      
+
 #if USE_LITTLEFS
       Serial.println(F("LittleFS failed!. Please use SPIFFS or EEPROM. Stay forever"));
 #else
@@ -636,25 +632,25 @@ void setup()
       }
     }
   }
-  
+
   File root = FileFS.open("/");
   File file = root.openNextFile();
-  
-  while (file) 
+
+  while (file)
   {
     String fileName = file.name();
     size_t fileSize = file.size();
     Serial.printf("FS File: %s, size: %s\n", fileName.c_str(), formatBytes(fileSize).c_str());
     file = root.openNextFile();
   }
-  
+
   Serial.println();
 
   drd = new DoubleResetDetector(DRD_TIMEOUT, DRD_ADDRESS);
 
   if (!drd)
     Serial.println(F("Can't instantiate. Disable DRD feature"));
-    
+
   unsigned long startedAt = millis();
 
   // New in v1.4.0
@@ -672,11 +668,11 @@ void setup()
     ESPAsync_WiFiManager ESPAsync_wifiManager(&server, NULL, "AsyncESP32-FSWebServer");
   #else
     AsyncDNSServer dnsServer;
-    
+
     ESPAsync_WiFiManager ESPAsync_wifiManager(&server, &dnsServer, "AsyncESP32-FSWebServer");
   #endif
 
-  #if USE_CUSTOM_AP_IP 
+  #if USE_CUSTOM_AP_IP
     //set custom ip for portal
     // New in v1.4.0
     ESPAsync_wifiManager.setAPStaticIPConfig(WM_AP_IPconfig);
@@ -689,7 +685,7 @@ void setup()
   ESPAsync_wifiManager.setConfigPortalChannel(0);
   //////
 
-  #if !USE_DHCP_IP    
+  #if !USE_DHCP_IP
       // Set (static IP, Gateway, Subnetmask, DNS1 and DNS2) or (IP, Gateway, Subnetmask). New in v1.0.5
       // New in v1.4.0
       ESPAsync_wifiManager.setSTAStaticIPConfig(WM_STA_IPconfig);
@@ -721,39 +717,39 @@ void setup()
   {
     LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass);
     wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-    
+
     ESPAsync_wifiManager.setConfigPortalTimeout(120); //If no access point name has been previously entered disable timeout.
     Serial.println(F("Got ESP Self-Stored Credentials. Timeout 120s for Config Portal"));
   }
-  
+
   if (loadConfigData())
   {
     configDataLoaded = true;
-    
+
     ESPAsync_wifiManager.setConfigPortalTimeout(120); //If no access point name has been previously entered disable timeout.
     Serial.println(F("Got stored Credentials. Timeout 120s for Config Portal"));
 
-    #if USE_ESP_WIFIMANAGER_NTP      
+    #if USE_ESP_WIFIMANAGER_NTP
         if ( strlen(WM_config.TZ_Name) > 0 )
         {
           LOGERROR3(F("Saving current TZ_Name ="), WM_config.TZ_Name, F(", TZ = "), WM_config.TZ);
 
       #if ESP8266
-          configTime(WM_config.TZ, "pool.ntp.org"); 
+          configTime(WM_config.TZ, "pool.ntp.org");
       #else
           //configTzTime(WM_config.TZ, "pool.ntp.org" );
           configTzTime(WM_config.TZ, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
-      #endif  
+      #endif
         }
         else
         {
           Serial.println(F("Current Timezone is not set. Enter Config Portal to set."));
-        } 
-    #endif 
+        }
+    #endif
   }
   else
   {
-    // Enter CP only if no stored SSID on flash and file 
+    // Enter CP only if no stored SSID on flash and file
     Serial.println(F("Open Config Portal without Timeout: No stored Credentials."));
     initialConfig = true;
   }
@@ -762,7 +758,7 @@ void setup()
   {
     // DRD, disable timeout.
     ESPAsync_wifiManager.setConfigPortalTimeout(0);
-    
+
     Serial.println(F("Open Config Portal without Timeout: Double Reset Detected"));
     initialConfig = true;
   }
@@ -770,8 +766,8 @@ void setup()
   if (initialConfig)
   {
     Serial.print(F("Starting configuration portal @ "));
-    
-    #if USE_CUSTOM_AP_IP    
+
+    #if USE_CUSTOM_AP_IP
         Serial.print(APStaticIP);
     #else
         Serial.print(F("192.168.4.1"));
@@ -784,7 +780,7 @@ void setup()
 
     #if DISPLAY_STORED_CREDENTIALS_IN_CP
         // New. Update Credentials, got from loadConfigData(), to display on CP
-        ESPAsync_wifiManager.setCredentials(WM_config.WiFi_Creds[0].wifi_ssid, WM_config.WiFi_Creds[0].wifi_pw, 
+        ESPAsync_wifiManager.setCredentials(WM_config.WiFi_Creds[0].wifi_ssid, WM_config.WiFi_Creds[0].wifi_pw,
                                             WM_config.WiFi_Creds[1].wifi_ssid, WM_config.WiFi_Creds[1].wifi_pw);
     #endif
 
@@ -798,12 +794,12 @@ void setup()
 
     // Stored  for later usage, from v1.1.0, but clear first
     memset(&WM_config, 0, sizeof(WM_config));
-    
+
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++)
     {
       String tempSSID = ESPAsync_wifiManager.getSSID(i);
       String tempPW   = ESPAsync_wifiManager.getPW(i);
-  
+
       if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
         strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
       else
@@ -812,7 +808,7 @@ void setup()
       if (strlen(tempPW.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1)
         strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
       else
-        strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);  
+        strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
 
       // Don't permit NULL SSID and password len < MIN_AP_PASSWORD_SIZE (8)
       if ( (String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) )
@@ -822,7 +818,7 @@ void setup()
       }
     }
 
-    #if USE_ESP_WIFIMANAGER_NTP      
+    #if USE_ESP_WIFIMANAGER_NTP
         String tempTZ   = ESPAsync_wifiManager.getTimezoneName();
 
         if (strlen(tempTZ.c_str()) < sizeof(WM_config.TZ_Name) - 1)
@@ -831,18 +827,18 @@ void setup()
           strncpy(WM_config.TZ_Name, tempTZ.c_str(), sizeof(WM_config.TZ_Name) - 1);
 
         const char * TZ_Result = ESPAsync_wifiManager.getTZ(WM_config.TZ_Name);
-        
+
         if (strlen(TZ_Result) < sizeof(WM_config.TZ) - 1)
           strcpy(WM_config.TZ, TZ_Result);
         else
           strncpy(WM_config.TZ, TZ_Result, sizeof(WM_config.TZ_Name) - 1);
-            
+
         if ( strlen(WM_config.TZ_Name) > 0 )
         {
           LOGERROR3(F("Saving current TZ_Name ="), WM_config.TZ_Name, F(", TZ = "), WM_config.TZ);
 
         #if ESP8266
-              configTime(WM_config.TZ, "pool.ntp.org"); 
+              configTime(WM_config.TZ, "pool.ntp.org");
         #else
               //configTzTime(WM_config.TZ, "pool.ntp.org" );
               configTzTime(WM_config.TZ, "time.nist.gov", "0.pool.ntp.org", "1.pool.ntp.org");
@@ -852,12 +848,12 @@ void setup()
         {
           LOGERROR(F("Current Timezone Name is not set. Enter Config Portal to set."));
         }
-    #endif 
+    #endif
 
     // New in v1.4.0
     ESPAsync_wifiManager.getSTAStaticIPConfig(WM_STA_IPconfig);
     //////
-    
+
     saveConfigData();
   }
 
@@ -879,7 +875,7 @@ void setup()
       }
     }
 
-    if ( WiFi.status() != WL_CONNECTED ) 
+    if ( WiFi.status() != WL_CONNECTED )
     {
       Serial.println(F("ConnectMultiWiFi in setup"));
       connectMultiWiFi();
@@ -902,10 +898,10 @@ void setup()
   {
     Serial.println(F("Error starting MDNS responder!"));
   }
-  
+
   // Add service to MDNS-SD
   MDNS.addService("http", "tcp", HTTP_PORT);
-  
+
   //SERVER INIT
   events.onConnect([](AsyncEventSourceClient * client)
   {
@@ -922,7 +918,7 @@ void setup()
   server.addHandler(new SPIFFSEditor(FileFS, http_username, http_password));
   //server.serveStatic("/", FileFS, "/").setDefaultFile("index.htm");
     // Handle Web Server
-  
+
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, dataHandler);
   });
@@ -930,7 +926,7 @@ void setup()
   server.onNotFound([](AsyncWebServerRequest * request)
   {
     Serial.print(F("NOT_FOUND: "));
-    
+
     if (request->method() == HTTP_GET)
       Serial.print(F("GET"));
     else if (request->method() == HTTP_POST)
@@ -947,7 +943,7 @@ void setup()
       Serial.print(F("OPTIONS"));
     else
       Serial.print(F("UNKNOWN"));
-      
+
     Serial.println(" http://" + request->host() + request->url());
 
     if (request->contentLength())
@@ -991,7 +987,7 @@ void setup()
   server.onFileUpload([](AsyncWebServerRequest * request, const String & filename, size_t index, uint8_t *data, size_t len, bool final)
   {
     (void) request;
-    
+
     if (!index)
       Serial.println("UploadStart: " + filename);
 
@@ -1004,7 +1000,7 @@ void setup()
   server.onRequestBody([](AsyncWebServerRequest * request, uint8_t *data, size_t len, size_t index, size_t total)
   {
     (void) request;
-    
+
     if (!index)
       Serial.println("BodyStart: " + total);
 
@@ -1022,8 +1018,8 @@ void setup()
   Serial.println(WiFi.localIP());
 
   Serial.println(separatorLine);
-  Serial.print("Open http://"); Serial.print(host);  
-  Serial.println(".local/edit to see the file browser"); 
+  Serial.print("Open http://"); Serial.print(host);
+  Serial.println(".local/edit to see the file browser");
   Serial.println("Using username = " + http_username + " and password = " + http_password);
   Serial.println(separatorLine);
 
@@ -1044,7 +1040,7 @@ void loop()
       drd->loop();
 
     //check_status();
-      
+
     ///// PZEM-004T BEGIN
     //static int32_t  voltage, current, power, gas;  // BME readings
     static char loopCounterStr[16], voltageStr[16], currentStr[16], powerStr[16], pfStr[16], energyStr[16];
@@ -1052,8 +1048,8 @@ void loop()
     static uint16_t stringLen;
     static float    alt;                            // Temporary variable
     static String strToInt;
-    
-    
+
+
     if((float) (millis() - thisTime) > 15000) {
         thisTime = millis();
 
@@ -1068,7 +1064,7 @@ void loop()
         energy = pzem.energy();
         frequency = pzem.frequency();
         pf = pzem.pf();
-        
+
         // Check if the data is valid
         if(isnan(voltage)){
             Serial.println("Error reading voltage");
@@ -1113,7 +1109,7 @@ void loop()
             powerString = String(power, 2);
             energyString = String(energy, 2);
             frequencyString = String(frequency, 2);
-            pfString = String(pf, 2);          
+            pfString = String(pf, 2);
 
             Serial.print(loopCounterStr);
             Serial.print(voltageString);
@@ -1134,9 +1130,9 @@ void loop()
             events.send(pfString.c_str(),"pf",millis());
         }
         Serial.println();
-            
+
         if((float) (millis() - currentTime) > requestDelay || loopCounter == 0) {
-            currentTime = millis();              
+            currentTime = millis();
             loopCounter++;
             voltage = total_voltage/samplingCount;
             current = total_current/samplingCount;
@@ -1157,7 +1153,7 @@ void loop()
             powerString = String(power, 2);
             energyString = String(energy, 2);
             frequencyString = String(frequency, 2);
-            pfString = String(pf, 2);          
+            pfString = String(pf, 2);
         }
-    }  
+    }
 }

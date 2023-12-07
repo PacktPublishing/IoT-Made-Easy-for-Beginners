@@ -1,9 +1,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-#define EXAMPLE_ESP_WIFI_SSID "{INSERT_YOUR_WIFI_SSID_HERE}"
-#define EXAMPLE_ESP_WIFI_PASS "{INSERT_YOUR_WIFI_PASSWORD_HERE}"
-#define MQTT_SERVER "192.168.0.117"
+#define EXAMPLE_ESP_WIFI_SSID "<YOUR_WIFI_SSID_HERE>"
+#define EXAMPLE_ESP_WIFI_PASS "<YOUR_WIFI_PASSWORD_HERE>"
+#define MQTT_SERVER "<YOUR_MQTT_SERVER_IP_HERE>"
 #define MQTT_PORT 1883
 
 WiFiClient espClient;
@@ -28,8 +28,8 @@ void callback(char *topic, byte *payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
   Serial.print("] ");
-  payload[length] = '\0'; // Null-terminate the payload string
-  String message = String((char *)payload); // Convert the payload to a String
+  payload[length] = '\0';
+  String message = String((char *)payload);
   Serial.println(message);
 }
 

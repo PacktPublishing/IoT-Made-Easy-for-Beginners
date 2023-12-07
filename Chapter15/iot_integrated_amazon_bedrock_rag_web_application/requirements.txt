@@ -1,0 +1,4 @@
+Flask
+numpy
+boto3
+langchain

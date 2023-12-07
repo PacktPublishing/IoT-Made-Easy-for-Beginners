@@ -1,0 +1,35 @@
+{ 
+
+    "pipelineName": "mypipeline", 
+
+    "pipelineActivities": [ 
+
+        { 
+
+            "channel": { 
+
+                "name": "mychannelactivity", 
+
+                "channelName": "mychannel", 
+
+                "next": "mystoreactivity" 
+
+            } 
+
+        }, 
+
+        { 
+
+            "datastore": { 
+
+                "name": "mystoreactivity", 
+
+                "datastoreName": "mydatastore" 
+
+            } 
+
+        } 
+
+    ] 
+
+} 
