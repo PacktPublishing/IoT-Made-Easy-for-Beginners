@@ -1,20 +1,3 @@
-/****************************************************************************************************************************
-  FullyFeature_ESP32.ino
-
-  AsyncMqttClient_Generic is a library for ESP32, ESP8266, Protenta_H7, STM32F7, etc. with current AsyncTCP support
-
-  Based on and modified from :
-
-  1) async-mqtt-client (https://github.com/marvinroger/async-mqtt-client)
-
-  Built by Khoi Hoang https://github.com/khoih-prog/AsyncMqttClient_Generic
- *****************************************************************************************************************************/
-/*
-  This example uses FreeRTOS softwaretimers as there is no built-in Ticker library
-*/
-
-#include "defines.h"
-
 #include <WiFi.h>
 
 extern "C"
@@ -24,19 +7,25 @@ extern "C"
 }
 #include <AsyncMqtt_Generic.h>
 
-//#define MQTT_HOST         IPAddress(192, 168, 2, 110)
 #define MQTT_HOST         "broker.hivemq.com"        // Broker address
-//#define MQTT_HOST         "broker.emqx.io"        // Broker address
+//#define MQTT_HOST         "broker.emqx.io"         // Another broker address
 #define MQTT_PORT         1883
-#define WIFI_SSID         "<YOUR_WIFI_SSID_HERE>"
-#define WIFI_PASSWORD     "<YOUR_WIFI_PASSWORD_HERE>"
-#define RELAY_PIN1        17
-#define RELAY_PIN1        2
+#define WIFI_SSID "My_Wifi_SSID"
+#define WIFI_PASSWORD "My-Wifi-Password:IOT"
+#define RELAY_PIN1        32
 #define RELAY_PIN2        33
-const char *PubTopic  = "mrtg/card_id";               // Topic to publish
-char keyword[8] = "SUCCESS";
+#define LED_PIN           2
 
-//const char *PubTopic  = "async-mqtt/ESP32_Pub";               // Topic to publish
+unsigned long relayStartTime = 0;
+int relayDelayTime = 5000;
+bool relayStatus = false;
+
+const char *PubTopic  = "mrtg/card_id";               // Topic to publish
+char payloadResult[128];
+char payload_keyword[8];
+
+char keyword[8] = "SUCCESS";
+int keyword_len = 7; 
 
 AsyncMqttClient mqttClient;
 TimerHandle_t mqttReconnectTimer;
@@ -128,23 +117,12 @@ void onMqttConnect(bool sessionPresent)
   Serial.print("Session present: ");
   Serial.println(sessionPresent);
 
-  uint16_t packetIdSub = mqttClient.subscribe(PubTopic, 2);
-  Serial.print("Subscribing at QoS 2, packetId: ");
-  Serial.println(packetIdSub);
-  /*
-  mqttClient.publish(PubTopic, 0, true, "ESP32 Test");
+  mqttClient.publish(PubTopic, 0, true, "Publish Test");
   Serial.println("Publishing at QoS 0");
 
-  uint16_t packetIdPub1 = mqttClient.publish(PubTopic, 1, true, "test 2");
-  Serial.print("Publishing at QoS 1, packetId: ");
-  Serial.println(packetIdPub1);
-
-  uint16_t packetIdPub2 = mqttClient.publish(PubTopic, 2, true, "test 3");
-  Serial.print("Publishing at QoS 2, packetId: ");
-  Serial.println(packetIdPub2);
-
-  printSeparationLine();
-  */
+  uint16_t packetIdSub = mqttClient.subscribe(PubTopic, 2);
+  
+  printSeparationLine();  
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
@@ -159,62 +137,33 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
   }
 }
 
-void onMqttSubscribe(const uint16_t& packetId, const uint8_t& qos)
-{
-  Serial.println("Subscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-  Serial.print("  qos: ");
-  Serial.println(qos);
-}
-
-void onMqttUnsubscribe(const uint16_t& packetId)
-{
-  Serial.println("Unsubscribe acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-}
-
 void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessageProperties& properties,
                    const size_t& len, const size_t& index, const size_t& total)
 {
   (void) payload;
-  /*
-  Serial.println("Publish received.");
-  Serial.print("  topic: ");
-  Serial.println(topic);
-  Serial.print("  qos: ");
-  Serial.println(properties.qos);
-  Serial.print("  dup: ");
-  Serial.println(properties.dup);
-  Serial.print("  retain: ");
-  Serial.println(properties.retain);
-  Serial.print("  len: ");
-  Serial.println(len);
-  Serial.print("  index: ");
-  Serial.println(index);
-  Serial.print("  total: ");
-  Serial.println(total);
-  */
-  Serial.println("Payload : ");
-  char payloadResult[8];
-  for (int i = 0; i < len; i++){
-      strcpy(&payloadResult[i], &payload[i]);
-      //payloadResult[i] = payload[i];
-      Serial.print(payloadResult[i]);
+  
+  int i = 0;
+  for (i = 0; i < len; i++){
+      payloadResult[i] = payload[i];
   }
-  payloadResult[7] == '\0';
-  Serial.println("\n");
+  payloadResult[i] == '\0';
+  Serial.println(payloadResult);
 
-//  if(strcmp(payloadResult, keyword) == 0){
-//      Serial.println("##### Success opening the door !!!");
-      digitalWrite(RELAY_PIN1, HIGH);
-      delay(5000);
-      digitalWrite(RELAY_PIN1, LOW);
-//  }
-//  else {
-//    Serial.println("##### Cannot open the door!!!");
-//  }
+  for(i = 0; i < keyword_len; i++){
+      payload_keyword[i] = payload[i];
+  }
+  payload_keyword[i] == '\0';
+
+  if(strcmp(payload_keyword, "Publish") != 0){
+      if(strcmp(payload_keyword, keyword) == 0){
+          // Start activating the relay
+          Serial.println(". Access GRANTED!!!");
+          relayStartTime = millis();      // record the current time
+      }
+      else{
+          Serial.println(". Access NOT Granted!!!");
+      }
+  }
 }
 
 void onMqttPublish(const uint16_t& packetId)
@@ -228,7 +177,12 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(RELAY_PIN1, OUTPUT);
-  digitalWrite(RELAY_PIN1, LOW);
+  pinMode(RELAY_PIN2, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  digitalWrite(RELAY_PIN1, HIGH);
+  digitalWrite(RELAY_PIN2, HIGH);
+  digitalWrite(LED_PIN, LOW);
 
   while (!Serial && millis() < 5000);
 
@@ -245,8 +199,6 @@ void setup()
 
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
-  mqttClient.onSubscribe(onMqttSubscribe);
-  mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
   mqttClient.onPublish(onMqttPublish);
 
@@ -257,4 +209,23 @@ void setup()
 
 void loop()
 {
+    if(relayStartTime != 0){
+        if(millis() < relayStartTime + relayDelayTime){
+            if(relayStatus == false){
+                relayStatus = true;
+                digitalWrite(RELAY_PIN1, LOW);
+                digitalWrite(LED_PIN, HIGH);
+                Serial.println("Relay1 Turn ON!");
+            }
+        }
+        else{
+          if(relayStatus == true){
+              relayStatus = false;
+              relayStartTime = 0;
+              digitalWrite(RELAY_PIN1, HIGH);
+              digitalWrite(LED_PIN, LOW);
+              Serial.println("Relay1 Turn OFF!");
+          }
+        }
+    }
 }

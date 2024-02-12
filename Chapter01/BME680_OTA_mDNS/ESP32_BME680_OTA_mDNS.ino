@@ -6,8 +6,8 @@
 #include <ESPmDNS.h>
 
 const char* host = "simple_iot";
-const char* ssid = "{INSERT_YOUR_WIFI_SSID_HERE}";
-const char* password = "{INSERT_YOUR_WIFI_PASSWORD_HERE}";
+const char* ssid = "My_Wifi_SSID";
+const char* password = "My-Wifi-Password:IOT";
 
 Adafruit_BME680 bme; // I2C
 
@@ -20,7 +20,7 @@ AsyncWebServer server(80);
 AsyncEventSource events("/events");
 
 unsigned long lastTime = 0;
-unsigned long timerDelay = 30000;  // send readings timer
+unsigned long timerDelay = 10000;  // send readings timer
 
 void getBME680Readings(){
   // Tell BME680 to begin measurement.
@@ -152,13 +152,13 @@ void setup(void) {
   Serial.println();
 
   /*use mdns for host name resolution*/
-  if (!MDNS.begin(host)) { //http://weatherstation.local
+  if (!MDNS.begin(host)) { //http://simple_iot.local
     Serial.println("Error setting up MDNS responder!");
     while (1) {
       delay(1000);
     }
   }
-  Serial.println("mDNS responder started, connect using : http://weatherstation.local");
+  Serial.println("mDNS responder started, connect using : http://simple_iot.local");
 
   AsyncElegantOTA.begin(&server);    // Start ElegantOTA
 

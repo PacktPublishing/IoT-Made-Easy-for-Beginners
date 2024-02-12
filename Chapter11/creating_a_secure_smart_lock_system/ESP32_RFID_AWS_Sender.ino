@@ -9,20 +9,29 @@
 #define RST_PIN         27           // Configurable, see typical pin layout above
 #define SS_PIN          5          // Configurable, see typical pin layout above
 #define SWITCH_PIN 32
-#define LOCK_PIN 33
+#define RELAY_PIN 33
 #define LED_PIN 2
+unsigned long relayStartTime = 0;
+int relayDelayTime = 5000;
+bool relayStatus = false;
+unsigned long ledStartTime = 0;
+int ledDelayTime = 500;
+bool ledStatus = false;
+int switchPinState;
+String state = "verify";
+
 MFRC522 rfid(SS_PIN, RST_PIN);   // Create MFRC522 instance.
 MFRC522::MIFARE_Key key;
- 
-const char WIFI_SSID[] = "<YOUR_WIFI_SSID>";               //change this to your Wifi credentials
-const char WIFI_PASSWORD[] = "<YOUR_WIFI_PASSWORD>";           //change this to your Wifi credentials
-const char AWS_IOT_ENDPOINT[] = "<YOUR_AWS_IOT_ENDPOINT>";   //change this to your AWS_IOT_Endpoint
- 
+
+const char WIFI_SSID[] = "My_Wifi_SSID";               //change this to your Wifi credentials
+const char WIFI_PASSWORD[] = "My-Wifi-Password:IOT";           //change this to your Wifi credentials
+const char AWS_IOT_ENDPOINT[] = "<YOUR_IOT_ENDPOINT_HERE>";   //change this to your AWS_IOT_Endpoint
+
 #define THINGNAME "ESP32_RFID"                         //change this to your thing name
 #define AWS_IOT_PUB_TOPIC   "rfid/1/pub"
 #define AWS_IOT_SUB_TOPIC   "rfid/1/sub"
 
-String device_id = "1"; 
+String device_id = "1";
 String rfidUid;
 int shift = 3;
 
@@ -65,9 +74,9 @@ void connectWifi()
 {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
- 
+
   Serial.println("Connecting to Wi-Fi");
- 
+
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
@@ -81,30 +90,30 @@ void connectAWS()
   net.setCACert(AWS_CERT_CA);
   net.setCertificate(AWS_CERT_CRT);
   net.setPrivateKey(AWS_CERT_PRIVATE);
- 
+
   // Connect to the MQTT broker on the AWS endpoint we defined earlier
   client.setServer(AWS_IOT_ENDPOINT, 8883);
- 
+
   // Create a message handler
   client.setCallback(messageHandler);
- 
+
   Serial.println("Connecting to AWS IOT");
- 
+
   while (!client.connect(THINGNAME))
   {
     Serial.print(".");
     delay(100);
   }
- 
+
   if (!client.connected())
   {
     Serial.println("AWS IoT Timeout!");
     return;
   }
- 
+
   // Subscribe to a topic
   client.subscribe(AWS_IOT_SUB_TOPIC);
- 
+
   Serial.println("AWS IoT Connected!");
 }
 
@@ -149,44 +158,83 @@ void messageHandler(char* topic, byte* payload, unsigned int length)
 {
   Serial.print("incoming: ");
   Serial.println(topic);
- 
+
   StaticJsonDocument<200> doc;
   deserializeJson(doc, payload);
   const char* message =  doc["encryptUid"];
   shift = 4;
   String decryptUid = caesar_cipher_decrypt(message, shift);
   Serial.print("Message : UID = ");
-  Serial.println(decryptUid);
+  Serial.print(decryptUid);
   if(decryptUid == rfidUid){
-    digitalWrite(LOCK_PIN, 1);
-    Serial.println("DOOR LOCK OPENED!");
-    delay(250);
-    digitalWrite(LOCK_PIN, 0);
-    Serial.println("DOOR LOCK CLOSED!");
+    Serial.print(" - ");
+    Serial.println("REGISTERED!");
+    relayStartTime = millis();
+  }
+  else{
+    Serial.println("WARNING, NOT REGISTERED!!!");
   }
 }
- 
+
 void setup()
 {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
-  pinMode(LOCK_PIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT);
   pinMode(SWITCH_PIN, INPUT_PULLUP);
+  digitalWrite(LED_PIN, LOW);
+  digitalWrite(RELAY_PIN, HIGH);
   SPI.begin();
   connectWifi();
   connectAWS();
   rfid.PCD_Init();
   Serial.println("\nPlace an RFID tag on the reader!");
 }
- 
+
 void loop()
 {
   if (!client.connected()) {
     reconnect();
-  }  
+  }
   client.loop();
-  
-  if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
+
+  if(relayStartTime != 0){
+    if(millis() < relayStartTime + relayDelayTime){
+        if(relayStatus == false){
+          relayStatus = true;
+          digitalWrite(RELAY_PIN, LOW);
+          digitalWrite(LED_PIN, HIGH);
+          Serial.println("DOOR OPEN!");
+        }
+    }
+    else{
+      if(relayStatus == true){
+        relayStatus = false;
+        relayStartTime = 0;
+        digitalWrite(RELAY_PIN, HIGH);
+        digitalWrite(LED_PIN, LOW);
+        Serial.println("DOOR CLOSED!");
+      }
+    }
+  }
+
+  if(ledStartTime != 0){
+    if(millis() < ledStartTime + ledDelayTime){
+        if(ledStatus == false){
+          ledStatus = true;
+          digitalWrite(LED_PIN, HIGH);
+        }
+    }
+    else{
+      if(ledStatus == true){
+        ledStatus = false;
+        ledStartTime = 0;
+        digitalWrite(LED_PIN, LOW);
+      }
+    }
+  }
+
+  if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) { // new tag is available && NUID has been read
     rfidUid = getUidString(rfid.uid.uidByte, rfid.uid.size);
     Serial.print("RFID tag detected: ");
     Serial.println(rfidUid);
@@ -194,17 +242,17 @@ void loop()
     String encryptedUid = caesar_cipher_encrypt(rfidUid, shift);
     Serial.print("Encrypted string : ");
     Serial.println(encryptedUid);
- 
-    // Publish RFID data to AWS MQTT
-    digitalWrite(LED_PIN, HIGH);
-    delay(1000);
-    digitalWrite(LED_PIN, LOW);
-    int switchPinState = digitalRead(SWITCH_PIN);
-    String state = "verify";
+
+    ledDelayTime = 500;
+    ledStartTime = millis();
+    switchPinState = digitalRead(SWITCH_PIN);
+    state = "verify";
     if(switchPinState == 0){
       state = "register";
     }
+    // Publish RFID data to AWS MQTT
     publishMessage(device_id, encryptedUid, state);
-    delay(500);
+    rfid.PICC_HaltA(); // halt PICC
+    rfid.PCD_StopCrypto1(); // stop encryption on PCD
   }
 }

@@ -11,12 +11,13 @@ WiFiMulti wifiMulti;
 
 uint32_t requestDelay = 30000;
 String sensorName = "PZEM-004T Home";
-String sensorLocation = "{ENTER_YOUR_SENSOR_ADDRESS_LOCATION_HERE}";
+String sensorLocation = "<ENTER_YOUR_LOCATION_HERE>";
 
 String voltageString, currentString, powerString, energyString, frequencyString, pfString;
 unsigned long currentTime,thisTime;
-const uint32_t SERIAL_SPEED{115200};
+const uint32_t SERIAL_SPEED{115200};  ///< Set the baud rate for Serial I/O
 
+////// PZEM-004T
 #include <PZEM004Tv30.h>
 PZEM004Tv30 pzem(Serial2, 16, 17);
 float voltage, current, power, energy, frequency, pf, total_voltage, total_current, total_power, total_frequency, total_pf, prev_energy, temp_energy;
@@ -47,11 +48,14 @@ String dataHandler(const String& var){
 #define LED_BUILTIN       2
 #define LED_ON            HIGH
 #define LED_OFF           LOW
+
+// You only need to format the filesystem once
+//#define FORMAT_FILESYSTEM true
 #define FORMAT_FILESYSTEM false
 #define USE_LITTLEFS    true
 #define USE_SPIFFS      false
 #include "FS.h"
-#include <LittleFS.h>
+#include <LittleFS.h>       // https://github.com/espressif/arduino-esp32/tree/master/libraries/LittleFS
 FS* filesystem =      &LittleFS;
 #define FileFS        LittleFS
 #define FS_Name       "LittleFS"
@@ -1156,4 +1160,308 @@ void loop()
             pfString = String(pf, 2);
         }
     }
+}
+
+void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig)
+{
+  in_WM_AP_IPconfig._ap_static_ip   = APStaticIP;
+  in_WM_AP_IPconfig._ap_static_gw   = APStaticGW;
+  in_WM_AP_IPconfig._ap_static_sn   = APStaticSN;
+}
+
+void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig)
+{
+  in_WM_STA_IPconfig._sta_static_ip   = stationIP;
+  in_WM_STA_IPconfig._sta_static_gw   = gatewayIP;
+  in_WM_STA_IPconfig._sta_static_sn   = netMask;
+#if USE_CONFIGURABLE_DNS
+  in_WM_STA_IPconfig._sta_static_dns1 = dns1IP;
+  in_WM_STA_IPconfig._sta_static_dns2 = dns2IP;
+#endif
+}
+
+void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig)
+{
+  LOGERROR3(F("stationIP ="), in_WM_STA_IPconfig._sta_static_ip, F(", gatewayIP ="), in_WM_STA_IPconfig._sta_static_gw);
+  LOGERROR1(F("netMask ="), in_WM_STA_IPconfig._sta_static_sn);
+#if USE_CONFIGURABLE_DNS
+  LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, F(", dns2IP ="), in_WM_STA_IPconfig._sta_static_dns2);
+#endif
+}
+
+void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig)
+{
+  #if USE_CONFIGURABLE_DNS
+    // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn, in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
+  #else
+    // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
+  #endif
+}
+
+uint8_t connectMultiWiFi()
+{
+#if ESP32
+  // For ESP32, this better be 0 to shorten the connect time.
+  // For ESP32-S2/C3, must be > 500
+  #if ( USING_ESP32_S2 || USING_ESP32_C3 )
+    #define WIFI_MULTI_1ST_CONNECT_WAITING_MS           500L
+  #else
+    // For ESP32 core v1.0.6, must be >= 500
+    #define WIFI_MULTI_1ST_CONNECT_WAITING_MS           800L
+  #endif
+  #else
+    // For ESP8266, this better be 2200 to enable connect the 1st time
+    #define WIFI_MULTI_1ST_CONNECT_WAITING_MS             2200L
+  #endif
+
+  #define WIFI_MULTI_CONNECT_WAITING_MS                   500L
+
+  uint8_t status;
+
+  //WiFi.mode(WIFI_STA);
+
+  LOGERROR(F("ConnectMultiWiFi with :"));
+
+  if ( (Router_SSID != "") && (Router_Pass != "") )
+  {
+    LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass );
+    LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass );
+    wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+  }
+
+  for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++)
+  {
+    // Don't permit NULL SSID and password len < MIN_AP_PASSWORD_SIZE (8)
+    if ( (String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) )
+    {
+      LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
+    }
+  }
+
+  LOGERROR(F("Connecting MultiWifi..."));
+
+  //WiFi.mode(WIFI_STA);
+
+  #if !USE_DHCP_IP
+    // New in v1.4.0
+    configWiFi(WM_STA_IPconfig);
+    //////
+  #endif
+
+  int i = 0;
+  status = wifiMulti.run();
+  delay(WIFI_MULTI_1ST_CONNECT_WAITING_MS);
+
+  while ( ( i++ < 20 ) && ( status != WL_CONNECTED ) )
+  {
+    status = WiFi.status();
+
+    if ( status == WL_CONNECTED )
+      break;
+    else
+      delay(WIFI_MULTI_CONNECT_WAITING_MS);
+  }
+
+  if ( status == WL_CONNECTED )
+  {
+    LOGERROR1(F("WiFi connected after time: "), i);
+    LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
+    LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
+  }
+  else
+  {
+    LOGERROR(F("WiFi not connected"));
+
+    // To avoid unnecessary DRD
+    drd->loop();
+
+    ESP.restart();
+  }
+
+  return status;
+}
+
+String formatBytes(size_t bytes)
+{
+  if (bytes < 1024)
+  {
+    return String(bytes) + "B";
+  }
+  else if (bytes < (1024 * 1024))
+  {
+    return String(bytes / 1024.0) + "KB";
+  }
+  else if (bytes < (1024 * 1024 * 1024))
+  {
+    return String(bytes / 1024.0 / 1024.0) + "MB";
+  }
+  else
+  {
+    return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";
+  }
+}
+
+void toggleLED()
+{
+  //toggle state
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+}
+
+
+void heartBeatPrint()
+{
+  #if USE_ESP_WIFIMANAGER_NTP
+    printLocalTime();
+  #else
+    static int num = 1;
+
+    if (WiFi.status() == WL_CONNECTED)
+      Serial.print(F("H"));        // H means connected to WiFi
+    else
+      Serial.print(F("F"));        // F means not connected to WiFi
+
+    if (num == 80)
+    {
+      Serial.println();
+      num = 1;
+    }
+    else if (num++ % 10 == 0)
+    {
+      Serial.print(F(" "));
+    }
+  #endif
+}
+
+void check_WiFi()
+{
+  if ( (WiFi.status() != WL_CONNECTED) )
+  {
+    Serial.println(F("\nWiFi lost. Call connectMultiWiFi in loop"));
+    connectMultiWiFi();
+  }
+}
+
+void check_status()
+{
+  static ulong checkstatus_timeout  = 0;
+  static ulong LEDstatus_timeout    = 0;
+  static ulong checkwifi_timeout    = 0;
+
+  static ulong current_millis;
+
+  #define WIFICHECK_INTERVAL    1000L
+
+  #if USE_ESP_WIFIMANAGER_NTP
+    #define HEARTBEAT_INTERVAL    60000L
+  #else
+    #define HEARTBEAT_INTERVAL    10000L
+  #endif
+
+  #define LED_INTERVAL          2000L
+
+  current_millis = millis();
+
+  // Check WiFi every WIFICHECK_INTERVAL (1) seconds.
+  if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0))
+  {
+    check_WiFi();
+    checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+  }
+
+  if ((current_millis > LEDstatus_timeout) || (LEDstatus_timeout == 0))
+  {
+    // Toggle LED at LED_INTERVAL = 2s
+    toggleLED();
+    LEDstatus_timeout = current_millis + LED_INTERVAL;
+  }
+
+  // Print hearbeat every HEARTBEAT_INTERVAL (10) seconds.
+  if ((current_millis > checkstatus_timeout) || (checkstatus_timeout == 0))
+  {
+    heartBeatPrint();
+    checkstatus_timeout = current_millis + HEARTBEAT_INTERVAL;
+  }
+}
+
+int calcChecksum(uint8_t* address, uint16_t sizeToCalc)
+{
+  uint16_t checkSum = 0;
+
+  for (uint16_t index = 0; index < sizeToCalc; index++)
+  {
+    checkSum += * ( ( (byte*) address ) + index);
+  }
+
+  return checkSum;
+}
+
+bool loadConfigData()
+{
+  File file = FileFS.open(CONFIG_FILENAME, "r");
+  LOGERROR(F("LoadWiFiCfgFile "));
+
+  memset((void *) &WM_config,       0, sizeof(WM_config));
+
+  // New in v1.4.0
+  memset((void *) &WM_STA_IPconfig, 0, sizeof(WM_STA_IPconfig));
+  //////
+
+  if (file)
+  {
+    file.readBytes((char *) &WM_config,   sizeof(WM_config));
+
+    // New in v1.4.0
+    file.readBytes((char *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+    //////
+
+    file.close();
+    LOGERROR(F("OK"));
+
+    if ( WM_config.checksum != calcChecksum( (uint8_t*) &WM_config, sizeof(WM_config) - sizeof(WM_config.checksum) ) )
+    {
+      LOGERROR(F("WM_config checksum wrong"));
+
+      return false;
+    }
+
+    // New in v1.4.0
+    displayIPConfigStruct(WM_STA_IPconfig);
+    //////
+
+    return true;
+  }
+  else
+  {
+    LOGERROR(F("failed"));
+
+    return false;
+  }
+}
+
+void saveConfigData()
+{
+  File file = FileFS.open(CONFIG_FILENAME, "w");
+  LOGERROR(F("SaveWiFiCfgFile "));
+
+  if (file)
+  {
+    WM_config.checksum = calcChecksum( (uint8_t*) &WM_config, sizeof(WM_config) - sizeof(WM_config.checksum) );
+
+    file.write((uint8_t*) &WM_config, sizeof(WM_config));
+
+    displayIPConfigStruct(WM_STA_IPconfig);
+
+    // New in v1.4.0
+    file.write((uint8_t*) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+    //////
+
+    file.close();
+    LOGERROR(F("OK"));
+  }
+  else
+  {
+    LOGERROR(F("failed"));
+  }
 }

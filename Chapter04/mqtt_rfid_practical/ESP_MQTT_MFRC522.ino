@@ -1,8 +1,3 @@
-/*
-This example uses FreeRTOS softwaretimers as there is no built-in Ticker library
-*/
-
-
 #include <WiFi.h>
 extern "C" {
 	#include "freertos/FreeRTOS.h"
@@ -14,13 +9,10 @@ extern "C" {
 #define SWITCH_PIN 32
 #define LED_PIN 2
 
-#define WIFI_SSID "<INSERT_WIFI_SSID_HERE>"
-#define WIFI_PASSWORD "<INSERT_WIFI_PASSWORD_HERE>"
-//#define WIFI_SSID "yourSSID"
-//#define WIFI_PASSWORD "yourpass"
+#define WIFI_SSID "My_Wifi_SSID"
+#define WIFI_PASSWORD "My-Wifi-Password:IOT"
 
 #define MQTT_HOST         "broker.hivemq.com"        // Broker address
-//#define MQTT_HOST IPAddress(192, 168, 1, 10)
 #define MQTT_PORT 1883
 #define MQTT_SUB_Output "mrtg/card_id"
 
@@ -77,16 +69,6 @@ void onMqttConnect(bool sessionPresent) {
   uint16_t packetIdSub = mqttClient.subscribe(MQTT_SUB_Output, 2);
   Serial.print("Subscribing at QoS 2, packetId: ");
   Serial.println(packetIdSub);
-  /*
-  mqttClient.publish(MQTT_SUB_Output, 0, true, "test 1");
-  Serial.println("Publishing at QoS 0");
-  uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_Output, 1, true, "test 2");
-  Serial.print("Publishing at QoS 1, packetId: ");
-  Serial.println(packetIdPub1);
-  uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_Output, 2, true, "test 3");
-  Serial.print("Publishing at QoS 2, packetId: ");
-  Serial.println(packetIdPub2);
-  */
 }
 
 void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
@@ -113,22 +95,6 @@ void onMqttUnsubscribe(uint16_t packetId) {
 
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
   Serial.println("Publish received.");
-  /*
-  Serial.print("  topic: ");
-  Serial.println(topic);
-  Serial.print("  qos: ");
-  Serial.println(properties.qos);
-  Serial.print("  dup: ");
-  Serial.println(properties.dup);
-  Serial.print("  retain: ");
-  Serial.println(properties.retain);
-  Serial.print("  len: ");
-  Serial.println(len);
-  Serial.print("  index: ");
-  Serial.println(index);
-  Serial.print("  total: ");
-  Serial.println(total);
-  */
   String messageTemp;
   for (int i = 0; i < len; i++) {
     messageTemp += (char)payload[i];
@@ -156,6 +122,8 @@ void setup() {
   SPI.begin();        // Init SPI bus
   mfrc522.PCD_Init(); // Init MFRC522 card
 
+  // Prepare the key (used both as key A and as key B)
+  // using FFFFFFFFFFFFh which is the default at chip delivery from the factory
   for (byte i = 0; i < 6; i++) {
       key.keyByte[i] = 0xFF;
   }
@@ -178,16 +146,12 @@ void setup() {
 
 void loop() {
   readSwitchValue = digitalRead(SWITCH_PIN);
-  //Serial.print("\nreadSwitchValue = ");
-  //Serial.println(readSwitchValue);
   if(readSwitchValue != previousReadSwitchValue){
       if(readSwitchValue == 0){
-        //Serial.println("Switch is Pressed\n");
         digitalWrite(LED_PIN, HIGH);
         previousReadSwitchValue = readSwitchValue;
       }
       else{
-        //Serial.println("Switch is Not Pressed\n");
         digitalWrite(LED_PIN, LOW);
         previousReadSwitchValue = readSwitchValue;
       }
@@ -208,18 +172,11 @@ void loop() {
   byte bufferSize1 = mfrc522.uid.size;
   Serial.print("***** Buffer size 1 = ");
   Serial.println(bufferSize1);
-  //dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
-  dump_byte_array(buffer1, bufferSize1);
-  //Serial.print("mfrc522.uid.size = ");
-  //Serial.println(mfrc522.uid.size);
+  //dump_byte_array(buffer1, bufferSize1);
 
-  // ***********
-  //byte array[4] = {0xAB, 0xCD, 0xEF, 0x99};
   char strResult1[17];
-  //char strResult1[bufferSize1+1];
   array_to_string(buffer1, bufferSize1, strResult1);
   strResult1[17] = '\0';
-  // ***********
 
   Serial.println();
   Serial.print(F("PICC type: "));
@@ -300,25 +257,25 @@ void loop() {
     }
     if(!found){ // cardID not registered
       byte dataBlock4[]    = {
-          0x70, 0x71, 0x72, 0x73, //  1,  2,   3,  4,
-          0x74, 0x75, 0x76, 0x77, //  5,  6,   7,  8,
-          0x78, 0x79, 0x7a, 0x7b, //  9, 10, 255, 11,
-          0x7c, 0x7d, 0x7e, 0x7f,  // 12, 13, 14, 15
-          0x00, 0x01, 0x02, 0x03, //  1,  2,   3,  4,
-          0x04, 0x05, 0x06, 0x07, //  5,  6,   7,  8,
-          0x08, 0x09, 0x0a, 0x0b, //  9, 10, 255, 11,
-          0x0c, 0x0d, 0x0e, 0x0f  // 12, 13, 14, 15
+          0x70, 0x71, 0x72, 0x73,
+          0x74, 0x75, 0x76, 0x77,
+          0x78, 0x79, 0x7a, 0x7b,
+          0x7c, 0x7d, 0x7e, 0x7f,
+          0x00, 0x01, 0x02, 0x03,
+          0x04, 0x05, 0x06, 0x07,
+          0x08, 0x09, 0x0a, 0x0b,
+          0x0c, 0x0d, 0x0e, 0x0f
       };
       byte blockAddr5      = 5;
       byte dataBlock5[]    = {
-          0x00, 0x01, 0x02, 0x03, //  1,  2,   3,  4,
-          0x04, 0x05, 0x06, 0x07, //  5,  6,   7,  8,
-          0x08, 0x09, 0x0a, 0x0b, //  9, 10, 255, 11,
-          0x0c, 0x0d, 0x0e, 0x0f,  // 12, 13, 14, 15
-          0x70, 0x71, 0x72, 0x73, //  1,  2,   3,  4,
-          0x74, 0x75, 0x76, 0x77, //  5,  6,   7,  8,
-          0x78, 0x79, 0x7a, 0x7b, //  9, 10, 255, 11,
-          0x7c, 0x7d, 0x7e, 0x7f  // 12, 13, 14, 15
+          0x00, 0x01, 0x02, 0x03,
+          0x04, 0x05, 0x06, 0x07,
+          0x08, 0x09, 0x0a, 0x0b,
+          0x0c, 0x0d, 0x0e, 0x0f,
+          0x70, 0x71, 0x72, 0x73,
+          0x74, 0x75, 0x76, 0x77,
+          0x78, 0x79, 0x7a, 0x7b,
+          0x7c, 0x7d, 0x7e, 0x7f
       };
 
       // Write data to the block4
@@ -326,7 +283,6 @@ void loop() {
       Serial.println(F(" ..."));
       dump_byte_array(dataBlock4, 16); Serial.println();
       status = (MFRC522::StatusCode) mfrc522.MIFARE_Write(blockAddr4, dataBlock4, 16);
-      //status = (MFRC522::StatusCode) mfrc522.MIFARE_Read(blockAddr4, buffer, &size);
       if (status != MFRC522::STATUS_OK) {
           Serial.print(F("MIFARE_Write() failed: "));
           Serial.println(mfrc522.GetStatusCodeName(status));
@@ -387,7 +343,6 @@ void loop() {
               count++;
       }
 
-      //Serial.print(F("Number of bytes that match = ")); Serial.println(count);
       if (count == 32) {
           // Add cardID into the registeredID array
           for(int i = 0; i<5; i++){
@@ -406,7 +361,6 @@ void loop() {
           mqttClient.publish("mrtg/card_id", 0, true, outString);
           blink_led(10, 100);
       }
-      //Serial.println();
 
       // Dump the sector data
       Serial.println(F("Current data in sector:"));

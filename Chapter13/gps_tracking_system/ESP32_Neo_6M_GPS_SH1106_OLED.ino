@@ -5,13 +5,13 @@
 #include <U8g2lib.h>
 #include <U8x8lib.h>
 
-#define BLYNK_TEMPLATE_ID "<INSERT_YOUR_TEMPLATE_ID_HERE>"
-#define BLYNK_TEMPLATE_NAME "<INSERT_A_TEMPLATE_NAME_HERE>"
-#define BLYNK_AUTH_TOKEN "<INSERT_YOUR_BLYNK_TOKEN_HERE>"
+#define BLYNK_TEMPLATE_ID "<INSERT_YOUR_TEMPLATE_ID_HERE>"         // Please change this according to your BLYNK settings
+#define BLYNK_TEMPLATE_NAME "<INSERT_A_TEMPLATE_NAME_HERE>"        // Please change this according to your BLYNK settings
+#define BLYNK_AUTH_TOKEN "<INSERT_YOUR_BLYNK_TOKEN_HERE>"          // Please change this according to your BLYNK settings
 #include <BlynkSimpleEsp32.h>
 
-const char *networkSSID = "<INSERT_YOUR_NETWORK_SSID_HERE>";
-const char *networkPASS = "<INSERT_YOUR_NETWORK_PASSWORD_HERE>";
+const char *networkSSID = "<INSERT_YOUR_NETWORK_SSID_HERE>";       // Please change this according to your Wifi settings
+const char *networkPASS = "<INSERT_YOUR_NETWORK_PASSWORD_HERE>";   // Please change this according to your Wifi settings
 
 unsigned long startLoopTime;
 unsigned int sendPeriod = 30000;
@@ -23,8 +23,8 @@ char charLatitude[12] = {0};
 char charLongitude[12] = {0};
 
 // The TinyGPSPlus object
-#define RXD2 17 // This is for T-Beam : 12, org : 17
-#define TXD2 18 // This is for T-Beam : 15, org : 18
+#define RXD2 17
+#define TXD2 18
 HardwareSerial ser2(2);
 TinyGPSPlus gps;
 
@@ -44,12 +44,6 @@ void setup() {
   Serial.println(F("Connected to WiFi"));
 
   oledDisplay.begin();
-
-/*
-  while (*gpsStream)
-    if (gps.encode(*gpsStream++))
-      displayInfo();
-*/
 
   Blynk.begin(BLYNK_AUTH_TOKEN, networkSSID, networkPASS);
   Blynk.virtualWrite(V5, "clr");

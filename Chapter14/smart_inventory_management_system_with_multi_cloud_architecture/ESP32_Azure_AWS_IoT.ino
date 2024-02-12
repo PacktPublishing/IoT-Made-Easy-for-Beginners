@@ -78,6 +78,9 @@
 static const char* wifi_ssid = IOT_CONFIG_WIFI_SSID;
 static const char* wifi_password = IOT_CONFIG_WIFI_PASSWORD;
 
+unsigned long lastSend = 0;
+int sendPeriod = 15000;
+
 /* --- Function Declarations --- */
 static void sync_device_clock_with_ntp_server();
 static void connect_to_wifi();
@@ -105,6 +108,7 @@ static bool send_device_info = true;
 //size_t send_data_period = 30; // With default frequency of once in 10 seconds
 static time_t last_telemetry_send_time = INDEFINITE_TIME;
 #define uS_TO_S_FACTOR 1000000ULL  /* Conversion factor for micro seconds to seconds */
+#define TIME_TO_SLEEP  60        /* Time ESP32 will go to sleep (in seconds) */
 
 // For BME680 sensor
 #include "Zanshin_BME680.h"  // Include the BME680 Sensor library
@@ -123,9 +127,10 @@ float altitude_calc(const int32_t press, const float seaLevel) {
 
 // AWS settings
 
+#define THINGNAME "ESP32_BME680"
 // AWS Topic
-#define AWS_IOT_PUBLISH_TOPIC   "esp32/pub"
-#define AWS_IOT_SUBSCRIBE_TOPIC "esp32/pub"
+#define AWS_IOT_PUBLISH_TOPIC   "bme680_data/pub"
+#define AWS_IOT_SUBSCRIBE_TOPIC "bme680_data/sub"
 
 // AWS_IOT_Certificates
 #include "certificates.h"
@@ -133,36 +138,29 @@ float altitude_calc(const int32_t press, const float seaLevel) {
 
 // Headers for
 #include <WiFiClientSecure.h>
-#include <PubSubClient.h>
-WiFiClientSecure net = WiFiClientSecure();
-PubSubClient client(net);
+#include <MQTTClient.h>
+WiFiClientSecure netAWS = WiFiClientSecure();
+MQTTClient client = MQTTClient(256);
 
 // AWS voids
 void connectAWS()
 {
   if(!WL_CONNECTED){
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(wifi_ssid, wifi_password);
-  
-    Serial.println("Connecting to Wi-Fi");
-  
-    while (WiFi.status() != WL_CONNECTED)
-    {
-      delay(500);
-      Serial.print(".");
-    }
+    connect_to_wifi();
   }
  
   // Configure WiFiClientSecure to use the AWS IoT device credentials
-  net.setCACert(AWS_CERT_CA);
-  net.setCertificate(AWS_CERT_CRT);
-  net.setPrivateKey(AWS_CERT_PRIVATE);
+  netAWS.setCACert(AWS_CERT_CA);
+  netAWS.setCertificate(AWS_CERT_CRT);
+  netAWS.setPrivateKey(AWS_CERT_PRIVATE);
  
   // Connect to the MQTT broker on the AWS endpoint we defined earlier
-  client.setServer(AWS_IOT_ENDPOINT, 8883);
+  client.begin(AWS_IOT_ENDPOINT, 8883, netAWS);
+  //client.setServer(AWS_IOT_ENDPOINT, 8883);
  
   // Create a message handler
-  client.setCallback(messageHandler);
+  client.onMessage(messageHandler);
+  //client.setCallback(messageHandler);
  
   Serial.println("Connecting to AWS IOT");
  
@@ -180,7 +178,6 @@ void connectAWS()
  
   // Subscribe to a topic
   client.subscribe(AWS_IOT_SUBSCRIBE_TOPIC);
- 
   Serial.println("AWS IoT Connected!");
 }
  
@@ -190,23 +187,43 @@ void publishMessage()
   doc["temperature"] = temperature;
   doc["humidity"] = humidity;
   doc["pressure"] = pressure;
-  doc["gas"] = gas;
   doc["altitude"] = altitude;
+  doc["gas"] = gas;
   char jsonBuffer[512];
   serializeJson(doc, jsonBuffer); // print to client
- 
-  client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  
+  //client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  int publishResult = client.publish(AWS_IOT_PUBLISH_TOPIC, jsonBuffer);
+  Serial.print("Published message to AWS : Result = ");
+  Serial.print(publishResult);
+  Serial.print(", payload = ");
+  Serial.println(jsonBuffer);
 }
- 
-void messageHandler(char* topic, byte* payload, unsigned int length)
+
+void messageHandler(String &topic, String &payload) {
+  Serial.println("Received AWS MQTT message : " + topic + " - " + payload);
+}
+
+
+static void read_sensor_data()
 {
-  Serial.print("incoming: ");
-  Serial.println(topic);
- 
-  StaticJsonDocument<200> doc;
-  deserializeJson(doc, payload);
-  const char* message = doc["message"];
-  Serial.println(message);
+  BME680.getSensorData(temp, humid, press, gas_raw);  // Get readings
+  temperature = float(floor(temp/100))+float((temp-(int(temp/100)*100)))/100;
+  humidity = float(floor(humid/1000))+float(floor((humid-(int(humid/1000)*1000))/10))/100;
+  pressure = float(floor(press/100))+float((press-(int(press/100)*100)))/100;
+  altitude = altitude_calc(press);
+  gas = float(floor(gas_raw/1000))+float(floor((gas_raw-(int(gas_raw/1000)*1000))/10))/100;
+
+  Serial.print("\nBME680 read sensor results = ");
+  Serial.print(temperature);
+  Serial.print(", ");
+  Serial.print(humidity);
+  Serial.print(", ");
+  Serial.print(pressure);
+  Serial.print(", ");
+  Serial.print(gas);
+  Serial.print(", ");
+  Serial.println(altitude);
 }
 
 /* --- MQTT Interface Functions --- */
@@ -218,27 +235,6 @@ void messageHandler(char* topic, byte* payload, unsigned int length)
 /*
  * See the documentation of `mqtt_client_init_function_t` in AzureIoT.h for details.
  */
-
-static void read_sensor_data()
-{
-  BME680.getSensorData(temp, humid, press, gas_raw);  // Get readings
-  temperature = float(floor(temp/100))+float((temp-(int(temp/100)*100)))/100;
-  humidity = float(floor(humid/1000))+float(floor((humid-(int(humid/1000)*1000))/10))/100;
-  pressure = float(floor(press/100))+float((press-(int(press/100)*100)))/100;
-  altitude = altitude_calc(press);
-  gas = float(floor(gas_raw/1000))+float(floor((gas_raw-(int(gas_raw/1000)*1000))/10))/100;
-
-  Serial.print("BME680 results = ");
-  Serial.print(temperature);
-  Serial.print(", ");
-  Serial.print(humidity);
-  Serial.print(", ");
-  Serial.print(pressure);
-  Serial.print(", ");
-  Serial.print(gas);
-  Serial.print(", ");
-  Serial.println(altitude);
-}
 
 static int mqtt_client_init_function(mqtt_client_config_t* mqtt_client_config, mqtt_client_handle_t *mqtt_client_handle)
 {
@@ -346,7 +342,7 @@ static int mqtt_client_subscribe_function(mqtt_client_handle_t mqtt_client_handl
  */
 static int mqtt_client_publish_function(mqtt_client_handle_t mqtt_client_handle, mqtt_message_t* mqtt_message)
 {
-  LogInfo("MQTT client publishing to '%s'", az_span_ptr(mqtt_message->topic));
+  LogInfo("MQTT client publishing to Azure '%s'", az_span_ptr(mqtt_message->topic));
 
   int mqtt_result = esp_mqtt_client_publish(
     (esp_mqtt_client_handle_t)mqtt_client_handle, 
@@ -444,7 +440,6 @@ static void on_command_request_received(command_request_t command)
   (void)azure_pnp_handle_command_request(&azure_iot, command);
 }
 
-/* --- Arduino setup and loop Functions --- */
 void setup()
 {
   Serial.begin(SERIAL_LOGGER_BAUD_RATE);
@@ -454,14 +449,9 @@ void setup()
 
   connect_to_wifi();
   sync_device_clock_with_ntp_server();
-
+  
   azure_pnp_init();
 
-  /* 
-   * The configuration structure used by Azure IoT must remain unchanged (including data buffer) 
-   * throughout the lifetime of the sample. This variable must also not lose context so other
-   * components do not overwrite any information within this structure.
-   */
   azure_iot_config.user_agent = AZ_SPAN_FROM_STR(AZURE_SDK_CLIENT_USER_AGENT);
   azure_iot_config.model_id = azure_pnp_get_model_id();
   azure_iot_config.use_device_provisioning = true; // Required for Azure IoT Central.
@@ -497,9 +487,14 @@ void setup()
   azure_iot_start(&azure_iot);
 
   LogInfo("Azure IoT client initialized (state=%d)", azure_iot.state);
-
+  
   // Connect to AWS IoT
   connectAWS();
+
+  // ESP32 Deep Sleep
+  //esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * uS_TO_S_FACTOR);
+  //Serial.println("Setup ESP32 to sleep for every " + String(TIME_TO_SLEEP) +
+  //" Seconds");
 }
 
 void loop()
@@ -511,45 +506,49 @@ void loop()
   }
   else
   {
+    if(millis() - lastSend >= sendPeriod){
+      read_sensor_data();
+      if (!client.connected())
+      {
+        connectAWS();
+      }
 
-    switch(azure_iot_get_status(&azure_iot))
-    {
-      case azure_iot_connected:
-        if (send_device_info)
-        {
-          (void)azure_pnp_send_device_info(&azure_iot, properties_request_id++);
-           send_device_info = false; // Only need to send once.
-        }
-        else
-        { 
-          read_sensor_data();
-
-          // Publish message containing sensor data to AWS_IoT
-          Serial.println("Publish Message to AWS IoT!");
-
-          if (azure_pnp_send_telemetry(&azure_iot, temperature, humidity, pressure, gas, altitude) != 0)
+      // Publish Message to AWS IoT
+      publishMessage();
+      lastSend = millis();
+      delay(1000);
+        
+      switch(azure_iot_get_status(&azure_iot))
+      {
+        case azure_iot_connected:
+          if (send_device_info)
           {
-            LogError("Failed sending telemetry.");          
+            (void)azure_pnp_send_device_info(&azure_iot, properties_request_id++);
+            send_device_info = false; // Only need to send once.
           }
-          publishMessage();
-          client.loop();
-          delay(30000);
-        }
-        break;
-      case azure_iot_error:
-        LogError("Azure IoT client is in error state." );
-        azure_iot_stop(&azure_iot);
-        break;
-      case azure_iot_disconnected:
-        azure_iot_start(&azure_iot);
-        break;
-      default:
-        break;
+          else
+          { 
+            if (azure_pnp_send_telemetry(&azure_iot, temperature, humidity, pressure, gas, altitude) != 0)
+            {
+              LogError("Failed sending telemetry.");          
+            }          
+          }
+          break;
+        case azure_iot_error:
+          LogError("Azure IoT client is in error state." );
+          azure_iot_stop(&azure_iot);
+          break;
+        case azure_iot_disconnected:
+          azure_iot_start(&azure_iot);
+          break;
+        default:
+          break;
+      }
+      azure_iot_do_work(&azure_iot);    
     }
-    azure_iot_do_work(&azure_iot);
   }
+  client.loop();
 }
-
 
 /* === Function Implementations === */
 

@@ -117,6 +117,8 @@ int azure_pnp_send_telemetry(azure_iot_t* azure_iot, float temperature, float hu
 
   size_t payload_size;
 
+  //last_telemetry_send_time = now;
+
   if (generate_telemetry_payload(data_buffer, DATA_BUFFER_SIZE, &payload_size, temperature, humidity, pressure, gas, altitude) != RESULT_OK)
   {
     LogError("Failed generating telemetry payload.");
@@ -137,8 +139,8 @@ int azure_pnp_send_device_info(azure_iot_t* azure_iot, uint32_t request_id)
   _az_PRECONDITION_NOT_NULL(azure_iot);
 
   int result;
-  size_t length;
-
+  size_t length;  
+    
   result = generate_device_info_payload(&azure_iot->iot_hub_client, data_buffer, DATA_BUFFER_SIZE, &length);
   EXIT_IF_TRUE(result != RESULT_OK, RESULT_ERROR, "Failed generating telemetry payload.");
 
@@ -251,7 +253,7 @@ static int generate_telemetry_payload(uint8_t* payload_buffer, size_t payload_bu
 
   payload_buffer[az_span_size(payload_buffer_span)] = null_terminator;
   *payload_buffer_length = az_span_size(payload_buffer_span);
-
+ 
   return RESULT_OK;
 }
 
@@ -267,7 +269,7 @@ static int generate_device_info_payload(az_iot_hub_client const* hub_client, uin
 
   rc = az_json_writer_append_begin_object(&jw);
   EXIT_IF_AZ_FAILED(rc, RESULT_ERROR, "Failed setting telemetry json root.");
-
+  
   rc = az_iot_hub_client_properties_writer_begin_component(
     hub_client, &jw, AZ_SPAN_FROM_STR(SAMPLE_DEVICE_INFORMATION_NAME));
   EXIT_IF_AZ_FAILED(rc, RESULT_ERROR, "Failed writting component name.");
@@ -328,7 +330,7 @@ static int generate_device_info_payload(az_iot_hub_client const* hub_client, uin
 
   payload_buffer[az_span_size(payload_buffer_span)] = null_terminator;
   *payload_buffer_length = az_span_size(payload_buffer_span);
-
+ 
   return RESULT_OK;
 }
 
@@ -347,6 +349,9 @@ static int generate_properties_update_response(
   azrc = az_json_writer_append_begin_object(&jw);
   EXIT_IF_AZ_FAILED(azrc, RESULT_ERROR, "Failed opening json in properties update response.");
 
+  // This Azure PnP Template does not have a named component,
+  // so az_iot_hub_client_properties_writer_begin_component is not needed.
+
   azrc = az_iot_hub_client_properties_writer_begin_response_status(
     &azure_iot->iot_hub_client,
     &jw,
@@ -361,7 +366,10 @@ static int generate_properties_update_response(
 
   azrc = az_iot_hub_client_properties_writer_end_response_status(&azure_iot->iot_hub_client, &jw);
   EXIT_IF_AZ_FAILED(azrc, RESULT_ERROR, "Failed closing status section in properties update response.");
-  
+
+  // This Azure PnP Template does not have a named component,
+  // so az_iot_hub_client_properties_writer_end_component is not needed.
+
   azrc = az_json_writer_append_end_object(&jw);
   EXIT_IF_AZ_FAILED(azrc, RESULT_ERROR, "Failed closing json in properties update response.");
 

@@ -83,10 +83,6 @@ void publishMessage()
 
 void messageHandler(String &topic, String &payload) {
   Serial.println("incoming: " + topic + " - " + payload);
-
-//  StaticJsonDocument<200> doc;
-//  deserializeJson(doc, payload);
-//  const char* message = doc["message"];
 }
 
 void setup() {
@@ -105,10 +101,10 @@ void loop() {
   }
 
   irSensorValue = analogRead(irSensorPin);
-  isObstacleDetected = irSensorValue < 500;
+  isObstacleDetected = irSensorValue < 1000;
 
   currentTime = millis();
-  if(currentTime - startTime > 10000){
+  if(currentTime - startTime > 5000){
     publishMessage();
   Serial.print(", irSensorValue = ");
   Serial.println(irSensorValue);

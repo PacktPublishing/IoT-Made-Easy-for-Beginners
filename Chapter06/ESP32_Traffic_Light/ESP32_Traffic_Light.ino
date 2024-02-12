@@ -3,6 +3,9 @@
 Servo servoMotor;
 
 int pos = 0;
+int prev_pos = 0;
+int min_pos = 30;
+int max_pos = 100;
 int servoPin = 16;
 const int trigPin = 17;
 const int echoPin = 18;
@@ -44,19 +47,36 @@ void loop() {
   Serial.println(distance);
 
   if (distance > 100) {
-    servoMotor.write(95);
-    trafficLightControl(4, 1, 0);
+    if (prev_pos != max_pos){
+      servoMotor.write(max_pos);
+      prev_pos = max_pos;
+      digitalWrite(greenLED, LOW);
+      delay(250);
+      digitalWrite(yellowLED, HIGH);
+      delay(2000);
+      digitalWrite(yellowLED, LOW);
+      delay(250);
+      digitalWrite(redLED, HIGH);
+      //trafficLightControl(4, 1, 0);
+    }
   } else {
-    servoMotor.write(5);
-    trafficLightControl(0, 1, 4);
+    if(prev_pos != min_pos){
+      servoMotor.write(min_pos);
+      prev_pos = min_pos;
+      digitalWrite(redLED, LOW);
+      delay(100);
+      digitalWrite(yellowLED, HIGH);
+      delay(1000);
+      digitalWrite(yellowLED, LOW);
+      delay(100);
+      digitalWrite(greenLED, HIGH);
+      //trafficLightControl(0, 1, 4);
+    }
   }
-
   delay(250);
-
 }
 
 void trafficLightControl(int redDuration, int yellowDuration, int greenDuration) {
-  digitalWrite(redLED, HIGH);
   delay(redDuration * 250);
   digitalWrite(redLED, LOW);
 

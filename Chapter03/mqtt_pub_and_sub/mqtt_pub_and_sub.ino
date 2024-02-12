@@ -1,8 +1,8 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-#define EXAMPLE_ESP_WIFI_SSID "<YOUR_WIFI_SSID_HERE>"
-#define EXAMPLE_ESP_WIFI_PASS "<YOUR_WIFI_PASSWORD_HERE>"
+#define EXAMPLE_ESP_WIFI_SSID "My_Wifi_SSID"
+#define EXAMPLE_ESP_WIFI_PASS "My-Wifi-Password:IOT"
 #define MQTT_SERVER "<YOUR_MQTT_SERVER_IP_HERE>"
 #define MQTT_PORT 1883
 
@@ -35,7 +35,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
 void reconnect() {
   while (!client.connected()) {
-    if (client.connect("ESP32Client")) {
+    if (client.connect("My_IOT_ESP32Client")) {
       client.subscribe("/topic/test1");
       client.subscribe("/topic/test2");
     } else {
@@ -62,8 +62,8 @@ void loop() {
     client.publish("/topic/test1", msg.c_str());
   }
 
-  if (millis() - lastMsg > 15000) {
+  if (millis() - lastMsg > 5000) {
     lastMsg = millis();
-    client.publish("/topic/test3", "Hello World");
+    client.publish("/topic/test2", "Hello World");
   }
 }
